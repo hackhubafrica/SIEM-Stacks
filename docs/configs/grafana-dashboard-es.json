@@ -1,0 +1,580 @@
+{
+  "dashboard": {
+    "title": "SIEM - Wazuh + Suricata + Zeek (Elasticsearch)",
+    "tags": [
+      "siem",
+      "elasticsearch",
+      "wazuh",
+      "suricata",
+      "zeek"
+    ],
+    "timezone": "browser",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "Wazuh Alerts Over Time",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "date_histogram",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": 0,
+                  "extended_bounds": {}
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "single"
+          },
+          "legend": {
+            "show": true
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "bargauge",
+        "title": "Alerts by Severity",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "terms",
+                "field": "rule.level",
+                "size": 10,
+                "order": "desc",
+                "orderBy": "1"
+              }
+            ]
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "showValue": true,
+          "valueOptions": {
+            "textMode": "value",
+            "colorMode": "value",
+            "text": {}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "bargauge",
+        "title": "Top Source IPs",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "terms",
+                "field": "srcip",
+                "size": 10,
+                "order": "desc",
+                "orderBy": "1"
+              }
+            ]
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "showValue": true,
+          "valueOptions": {
+            "textMode": "value",
+            "colorMode": "value",
+            "text": {}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "table",
+        "title": "Recent Wazuh Alerts",
+        "gridPos": {
+          "h": 10,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "terms",
+                "field": "rule.description",
+                "size": 50,
+                "order": "desc",
+                "orderBy": "1"
+              }
+            ]
+          }
+        ],
+        "options": {
+          "showHeader": true
+        }
+      },
+      {
+        "id": 5,
+        "type": "stat",
+        "title": "Total Alerts (1h)",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 26
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": []
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "count"
+            ],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "value_and_name",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "center"
+        }
+      },
+      {
+        "id": 6,
+        "type": "stat",
+        "title": "High Severity (level >= 12)",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 26
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "wazuh-alerts-* AND rule.level:[12 TO *]",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": []
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "count"
+            ],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "value_and_name",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "center"
+        }
+      },
+      {
+        "id": 7,
+        "type": "stat",
+        "title": "Suricata Rules Loaded",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 26
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "suricata-* AND event_type:stats",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "avg",
+                "field": "stats.detect.engines.rules_loaded"
+              }
+            ]
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "count"
+            ],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "value_and_name",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "center"
+        }
+      },
+      {
+        "id": 8,
+        "type": "stat",
+        "title": "Pipeline Status",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 26
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": []
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "count"
+            ],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "value_and_name",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "center"
+        }
+      },
+      {
+        "id": 9,
+        "type": "timeseries",
+        "title": "Suricata Protocol Distribution",
+        "gridPos": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 30
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "suricata-* AND event_type:stats",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "date_histogram",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": 0,
+                  "extended_bounds": {}
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "single"
+          },
+          "legend": {
+            "show": true
+          }
+        }
+      },
+      {
+        "id": 10,
+        "type": "bargauge",
+        "title": "Suricata Detect Engines",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "suricata-* AND event_type:stats",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "terms",
+                "field": "stats.detect.engines.id",
+                "size": 10,
+                "order": "asc",
+                "orderBy": "_key"
+              }
+            ]
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "showValue": true,
+          "valueOptions": {
+            "textMode": "value",
+            "colorMode": "value",
+            "text": {}
+          }
+        }
+      },
+      {
+        "id": 11,
+        "type": "timeseries",
+        "title": "Event Rate (all indices)",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 48
+        },
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "dg25outs9pxq8a"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "elasticsearch",
+              "uid": "dg25outs9pxq8a"
+            },
+            "query": "*",
+            "timeField": "@timestamp",
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "field": "*"
+              }
+            ],
+            "bucketAggs": [
+              {
+                "id": "2",
+                "type": "date_histogram",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": 0,
+                  "extended_bounds": {}
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "single"
+          },
+          "legend": {
+            "show": true
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

@@ -1,0 +1,20 @@
+filebeat.inputs:
+- type: filestream
+  id: zeek-current
+  enabled: true
+  paths:
+    - /var/spool/zeek/*.log
+  json.keys_under_root: true
+  json.add_error_key: true
+
+output.elasticsearch:
+  hosts: ["http://localhost:9201"]
+  index: "zeek-filebeat-%{+yyyy.MM.dd}"
+  ilm.enabled: false
+
+setup.template:
+  name: "zeek-filebeat"
+  pattern: "zeek-filebeat-*"
+
+seccomp.enabled: false
+setup.ilm.enabled: false

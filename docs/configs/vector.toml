@@ -1,0 +1,42 @@
+data_dir = "/var/lib/vector"
+
+[sources.suricata_eve]
+type = "file"
+include = ["/var/log/suricata/eve.json"]
+read_from = "end"
+fingerprint.strategy = "device_and_inode"
+
+[sources.zeek_logs]
+type = "file"
+include = ["/var/log/zeek/current/*.log"]
+read_from = "end"
+fingerprint.strategy = "device_and_inode"
+
+[transforms.parse_suricata]
+type = "remap"
+inputs = ["suricata_eve"]
+source = '''
+. = parse_json!(.message)
+.sensor = "suricata"
+'''
+
+[transforms.parse_zeek]
+type = "remap"
+inputs = ["zeek_logs"]
+source = '''
+. = parse_json!(.message)
+.sensor = "zeek"
+.event_type = ._path
+'''
+
+[sinks.loki_out]
+type = "loki"
+inputs = ["parse_suricata", "parse_zeek"]
+endpoint = "http://localhost:3100"
+encoding.codec = "json"
+healthcheck = true
+
+[sinks.loki_out.labels]
+job = "siem"
+sensor = "sensor-{{ .sensor }}"
+event_type = "evt-{{ .event_type }}"

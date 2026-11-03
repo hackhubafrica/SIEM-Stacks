@@ -1,0 +1,33 @@
+# Filebeat config: Wazuh alerts -> Elasticsearch (standalone on 9201)
+filebeat.inputs:
+- type: filestream
+  id: wazuh-alerts
+  enabled: true
+  paths:
+    - /var/ossec/logs/alerts/alerts.json
+  json.keys_under_root: true
+  json.add_error_key: true
+
+# No Filebeat modules loaded - using filestream input directly for Wazuh alerts
+
+output.elasticsearch:
+  hosts: ["http://localhost:9201"]
+  index: "wazuh-alerts-%{+yyyy.MM.dd}"
+  ilm.enabled: false
+
+setup.template:
+  name: "wazuh-alerts"
+  pattern: "wazuh-alerts-*"
+
+setup.kibana:
+  host: "http://localhost:5601"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /home/th3blaacksh33p/filebeat-logs-wazuh
+  name: filebeat.log
+  keepfiles: 7
+
+seccomp.enabled: false
+setup.ilm.enabled: false
