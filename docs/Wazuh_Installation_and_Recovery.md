@@ -127,6 +127,7 @@ official package instructions.
 
 Official references:
 
+- [Wazuh server installation and Filebeat configuration](https://documentation.wazuh.com/current/installation-guide/wazuh-server/step-by-step.html)
 - [Wazuh Indexer installation and cluster initialization](https://documentation.wazuh.com/current/installation-guide/wazuh-indexer/step-by-step.html)
 - [Wazuh Dashboard installation](https://documentation.wazuh.com/current/installation-guide/wazuh-dashboard/step-by-step.html)
 - [Wazuh password management](https://documentation.wazuh.com/current/user-manual/user-administration/password-management.html)
@@ -357,7 +358,7 @@ including it in the command line:
 
 ```bash
 sudo systemctl show filebeat -p ExecStart --no-pager
-sudo grep -nE 'output\\.elasticsearch:|hosts:|index:|setup\\.template|wazuh-template|filebeat\\.modules|module: wazuh' \
+sudo grep -nE 'output\.elasticsearch:|hosts:|index:|setup\.template|wazuh-template|filebeat\.modules|module: wazuh' \
   /etc/filebeat/filebeat.yml
 sudo filebeat test config -c /etc/filebeat/filebeat.yml
 sudo filebeat test output -c /etc/filebeat/filebeat.yml
@@ -449,3 +450,148 @@ Expected:
 - Filebeat thread creation failures and disk pressure were observed separately;
   they require independent follow-up and should not be confused with the
   Dashboard-to-Indexer credential repair.
+
+## 11. Read-only diagnosis snapshot (2026-11-05)
+
+The following checks were run without elevated privileges. They establish that
+the Wazuh web/indexer endpoints are responding, but do not prove that alerts are
+being indexed:
+
+- `wazuh-indexer`, `wazuh-manager`, `wazuh-dashboard`, and `filebeat` were
+  reported active by systemd.
+- The Indexer security-health endpoint returned HTTP 200. The Dashboard root
+  returned HTTP 302 (redirect to login). The unauthenticated Manager API
+  returned HTTP 401, which is expected without API credentials.
+- Filebeat had `NRestarts=962`; its journal repeatedly reported
+  `runtime/cgo: pthread_create failed: Operation not permitted`, followed by
+  process exit status `2/INVALIDARGUMENT`. Its current `active` state is not
+  evidence of reliable alert shipping.
+- A follow-up check still found repeated thread-creation aborts (the recent
+  journal's restart counter advanced during inspection). Filebeat runs as root,
+  with `TasksMax=18820`, `LimitNPROC=62736`, and 10 tasks in its cgroup at that
+  moment; the visible systemd unit has no `SystemCallFilter`. A subsequent
+  process check found Filebeat itself had `NoNewPrivs=1`, `Seccomp=2`, and one
+  seccomp filter, while PID 1 and the shell had no seccomp filter. This points
+  to Filebeat's own seccomp profile as a plausible source of the thread-creation
+  denial. Inspect the active `seccomp.enabled` setting before changing it. If
+  testing `seccomp.enabled: false`, make a protected backup first and note that
+  it removes this additional syscall sandbox; increasing task limits is not
+  supported by the observed values.
+  The later interactive diagnostic output confirmed Filebeat config validation
+  passed, but its active output is `http://localhost:9201`; `filebeat test
+  output` connected to Elasticsearch 7.10.2 there. This is the separate
+  Elasticsearch path, not the Wazuh Indexer on HTTPS port 9200.
+- The Wazuh Filebeat module directory and `/etc/filebeat/wazuh-template.json`
+  are present locally. The active config still needs to enable the matching
+  module and use the Wazuh Indexer output; their mere presence does not enable
+  or use them.
+- Manager ports 1514 and 1515 were listening on all IPv4 interfaces. The
+  Indexer and Manager API listeners were also not loopback-only. Confirm the
+  host firewall and intended network exposure before enrolling an endpoint;
+  do not expose ports 9200 or 55000 to an untrusted network.
+- The active Filebeat output mismatch is confirmed. Filebeat currently sends
+  to the separate Elasticsearch listener on 9201, so that data cannot appear
+  in the Wazuh Dashboard backed by the Indexer at 9200. The Filebeat service
+  also continues to crash intermittently on thread creation. Both the target
+  and runtime failure need to be resolved; changing the Dashboard's data view
+  will not fix either one.
+- The alert index listing and authenticated API state remain unverified
+  because the pasted `_cat/indices` request returned `Unauthorized`. Re-run
+  the read-only checks below after entering the correct Indexer `admin`
+  password at the prompt:
+
+  ```bash
+  sudo systemctl status filebeat --no-pager --full
+  sudo systemctl show filebeat -p NRestarts -p ExecStart --no-pager
+  sudo journalctl -u filebeat --since '2 hours ago' --no-pager -o cat | \
+    grep -Ei 'pthread_create|fatal|panic|failed|unauthorized|401|connection refused' | \
+    tail -n 80
+  sudo grep -nE 'output\.elasticsearch:|hosts:|index:|setup\.template|wazuh-template|filebeat\.modules|module: wazuh' \
+    /etc/filebeat/filebeat.yml
+  sudo grep -nE '<(address|port|protocol|host|username)>' \
+    /var/ossec/etc/ossec.conf
+  sudo tail -n 120 /var/ossec/logs/ossec.log | \
+    grep -Ei 'indexer-connector|agent|authd|error|warn|connected|failed' | tail -n 60
+  curl -skS -u admin \
+    'https://127.0.0.1:9200/_cat/indices/wazuh-alerts-*?v'
+  curl -skS -u admin \
+    'https://127.0.0.1:9200/_index_template?pretty' | grep -i -A 8 -B 3 wazuh
+  ```
+
+  `curl -u admin` prompts for the password; do not put it directly in the
+  command. These checks do not edit files or restart services.
+
+Do not simply change the custom Filebeat URL from port 9201 to 9200 and restart
+it: the current config uses plain HTTP and a custom index, and the Wazuh module
+is not enabled in the active configuration. The Wazuh Indexer expects HTTPS and
+authenticated access. Back up the active configuration, then align it with the
+version-matched Wazuh Filebeat module/template configuration and Indexer
+certificates and credentials. The local Wazuh module and template are already
+installed. Preserve a separate Filebeat process/config only if the standalone
+Elasticsearch feed is still needed; one Filebeat process cannot send to two
+different Elasticsearch outputs. Validate the Wazuh output and credentials
+before restarting, then confirm a versioned Wazuh alert index appears before
+refreshing/recreating the Dashboard data view. Do not copy passwords or private
+keys into this repository.
+
+## 12. Enrolling an endpoint as a Wazuh agent
+
+The installed `wazuh-manager` package and the repository's bundled
+`wazuh-agent-4.14.9-1-x86_64.pkg.tar.zst` cannot be installed together on this
+Arch host: the agent package metadata explicitly declares a conflict with
+`wazuh-manager`, and both use `/var/ossec`. Do not install that agent package
+on the Manager machine. The binaries shown in `/var/ossec/bin` are Manager
+tools; `manage_agents` and `agent_control` administer endpoint registrations,
+but they are not the agent daemon.
+
+For another compatible endpoint on the trusted LAN:
+
+1. Use the Manager's reachable LAN IP/DNS name, not `127.0.0.1` from the
+   endpoint. Restrict firewall access to the intended endpoint(s): TCP 1514
+   for agent communication and TCP 1515 for enrollment. The Manager was
+   observed listening on both ports, but its firewall policy was not checked.
+2. Install a version-matched Wazuh agent on that endpoint from a trusted source.
+   The bundled Arch package is for a separate x86_64 Arch endpoint; verify its
+   provenance/signature before installing it there.
+3. On the endpoint, configure its Manager address in
+   `/var/ossec/etc/ossec.conf`, then enroll using the agent's `agent-auth`
+   binary:
+
+   ```bash
+   sudo /var/ossec/bin/agent-auth \
+     -m <MANAGER_LAN_IP_OR_DNS> -p 1515 -A <UNIQUE_AGENT_NAME>
+   sudo systemctl enable --now wazuh-agent
+   sudo systemctl status wazuh-agent --no-pager --full
+   ```
+
+   Replace the placeholders; do not include angle brackets. The agent name
+   should be unique. Do not copy an enrollment key into shell history or a
+   shared log. If enrollment is configured for a shared password, follow the
+   version-specific Wazuh procedure and protect that credential.
+4. On the Manager, verify that the endpoint appears and is connected:
+
+   ```bash
+   sudo /var/ossec/bin/agent_control -l
+   sudo tail -n 100 /var/ossec/logs/ossec.log | \
+     grep -Ei 'agent|authd|connected|error|warn|failed' | tail -n 50
+   ```
+
+The Manager-side `manage_agents` utility offers interactive manual agent
+creation/key management when needed; use its on-screen menu and transfer any
+generated key only through a private channel. Do not combine manual key import
+with automatic enrollment for the same agent. If the goal is to monitor this
+Manager host itself, use its existing Manager log collection/configuration
+instead of trying to install the conflicting agent package locally.
+
+The pasted Manager-side `agent_control -l` output lists only ID `000`
+(`archlinux`, local Manager), which is normal; it is not an enrolled separate
+agent. The shown Manager config already enables local syscheck and journald
+collection. A separate local agent is not needed to monitor this same Manager
+host, and installing the bundled `wazuh-agent` package would conflict with its
+`wazuh-manager` package.
+
+The Wazuh Manager already runs on this host and can collect this host's logs
+and monitor configured files directly. Check `<localfile>` and `<syscheck>`
+entries in `/var/ossec/etc/ossec.conf` before adding more components; a separate
+agent record for the same host is not needed to make its local logs available
+to the Manager.

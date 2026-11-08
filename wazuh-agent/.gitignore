@@ -1,0 +1,8 @@
+*.rpm
+*.pkg.tar.zst
+*.pkg.tar.zst.sig
+cis_arch_linux.yml
+
+# Directorios de trabajo de makepkg
+pkg/
+src/

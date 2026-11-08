@@ -1,0 +1,93 @@
+_ossec_conf="/var/ossec/etc/ossec.conf"
+_ossec_conf_bak="/var/ossec/etc/ossec.conf.bak"
+
+post_install() {
+  echo "Creating wazuh user and group..."
+  # Crear grupo de sistema (-r) si no existe
+  getent group wazuh &>/dev/null || groupadd -r wazuh
+  # Crear usuario de sistema (-r) sin home (-M), shell nologin, para que no aparezca en login
+  getent passwd wazuh &>/dev/null || useradd -r -g wazuh -M -d /var/ossec -s /usr/sbin/nologin -c "Wazuh Agent" wazuh
+  chown -R wazuh:wazuh /var/ossec
+
+  # El %post del RPM crea este fichero. Sin el, wazuh-logcollector arranca
+  # escupiendo "ERROR: (1103): Could not open file
+  # '/var/ossec/logs/active-responses.log'" en cada instalacion limpia.
+  touch /var/ossec/logs/active-responses.log
+  chown wazuh:wazuh /var/ossec/logs/active-responses.log
+  chmod 0660 /var/ossec/logs/active-responses.log
+
+  echo "Done!"
+  echo ""
+  echo "A default ossec.conf has been installed."
+  echo "Edit /var/ossec/etc/ossec.conf to configure your Wazuh manager IP address."
+  echo ""
+  echo "Visit https://documentation.wazuh.com/current/installation-guide/wazuh-agent/wazuh-agent-package-linux.html"
+  echo "and follow the configure instructions."
+  echo ""
+  echo "Quick start commands:"
+  echo "  /var/ossec/bin/manage_agents -i <agent_key>"
+  echo "  systemctl daemon-reload"
+  echo "  systemctl enable wazuh-agent"
+  echo "  systemctl start wazuh-agent"
+}
+
+pre_upgrade() {
+  # Respaldar configuración actual antes de la actualización
+  if [ -f "$_ossec_conf" ]; then
+    echo "Backing up current ossec.conf..."
+    cp -f "$_ossec_conf" "$_ossec_conf_bak"
+  fi
+
+  # Eliminar archivos SCA no rastreados por pacman para evitar conflictos
+  local _sca_dir="/var/ossec/ruleset/sca"
+  if [ -d "$_sca_dir" ]; then
+    rm -f "$_sca_dir/cis_arch_linux.yml"
+  fi
+}
+
+post_upgrade() {
+  # Asegurarse de que el usuario y grupo existan después de una actualización
+  getent group wazuh &>/dev/null || groupadd -r wazuh
+  getent passwd wazuh &>/dev/null || useradd -r -g wazuh -M -d /var/ossec -s /usr/sbin/nologin -c "Wazuh Agent" wazuh
+
+  # Restaurar configuración respaldada si existe
+  if [ -f "$_ossec_conf_bak" ]; then
+    echo "Restoring previous ossec.conf configuration..."
+    cp -f "$_ossec_conf_bak" "$_ossec_conf"
+    echo "Your previous configuration has been restored."
+  fi
+
+  # Restaurar permisos correctos después de una actualización
+  chown -R wazuh:wazuh /var/ossec
+
+  # Red de seguridad para quien venga de una version que no lo creaba: sin este
+  # fichero wazuh-logcollector arranca con "ERROR: (1103): Could not open file".
+  touch /var/ossec/logs/active-responses.log
+  chown wazuh:wazuh /var/ossec/logs/active-responses.log
+  chmod 0660 /var/ossec/logs/active-responses.log
+
+  # Asegurarse de que los archivos de configuración tengan los permisos correctos
+  if [ -f "$_ossec_conf" ]; then
+    chmod 640 "$_ossec_conf"
+    chown wazuh:wazuh "$_ossec_conf"
+  fi
+
+  if [ -f "/var/ossec/etc/local_internal_options.conf" ]; then
+    chmod 640 /var/ossec/etc/local_internal_options.conf
+  fi
+
+  if [ -f "/var/ossec/etc/client.keys" ]; then
+    chmod 640 /var/ossec/etc/client.keys
+  fi
+}
+
+pre_remove() {
+  echo "Stopping wazuh-agent service..."
+  systemctl stop wazuh-agent 2>/dev/null || true
+  systemctl disable wazuh-agent 2>/dev/null || true
+}
+
+post_remove() {
+  echo "Note: Configuration files in /var/ossec/etc/ have been preserved."
+  echo "Remove /var/ossec manually if you want to delete all data."
+}
